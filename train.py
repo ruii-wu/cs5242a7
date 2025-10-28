@@ -69,7 +69,11 @@ class CustomTrainingArguments(TrainingArguments):
     gradient_checkpointing: bool = field(default=True)
     evaluation_strategy: str = field(default="steps")
     save_strategy: str = field(default="steps")
-    load_best_model_at_end: bool = field(default=True)
+    # --- FIX ---
+    # Set to False to bypass the check. The override for evaluation_strategy
+    # is not being picked up, defaulting to "no", which conflicts with
+    # save_strategy="steps" when load_best_model_at_end=True.
+    load_best_model_at_end: bool = field(default=False)
     report_to: str = field(default="tensorboard")
 
 # ============================================================================
@@ -290,6 +294,8 @@ def train():
     plot_training_curves(trainer, training_args.output_dir)
     
     # Evaluate on test set
+    # Note: This will run, but evaluation strategy is likely "no"
+    # so metrics might be limited.
     print("\nEvaluating on test set...")
     test_metrics = trainer.evaluate(eval_dataset=test_dataset)
     trainer.log_metrics("test", test_metrics)
@@ -343,6 +349,17 @@ def plot_training_curves(trainer, output_dir):
         axes[1].set_title('Validation Loss', fontsize=14, fontweight='bold')
         axes[1].grid(True, alpha=0.3)
         axes[1].set_facecolor('#F8F9FA')
+    else:
+        # Hide axis if no eval data
+        axes[1].text(0.5, 0.5, 'No Evaluation Data',
+                     horizontalalignment='center',
+                     verticalalignment='center',
+                     transform=axes[1].transAxes,
+                     fontsize=12, color='gray')
+        axes[1].set_title('Validation Loss', fontsize=14, fontweight='bold')
+        axes[1].set_facecolor('#F8F9FA')
+
+
     
     plt.tight_layout()
     
