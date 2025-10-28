@@ -14,7 +14,13 @@ from transformers import (
     HfArgumentParser
 )
 from peft import LoraConfig, prepare_model_for_kbit_training
-from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
+from trl import SFTTrainer
+try:
+    from trl import DataCollatorForCompletionOnlyLM
+except ImportError:
+    # For older versions of trl, use the transformer's default collator
+    from transformers import DataCollatorForLanguageModeling
+    DataCollatorForCompletionOnlyLM = None
 import matplotlib.pyplot as plt
 import numpy as np
 
