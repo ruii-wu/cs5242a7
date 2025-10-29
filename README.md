@@ -2,10 +2,15 @@
 
 ### Setup
 - Python 3.10+ recommended
-- Install with CUDA 12.x-compatible PyTorch wheels (cu124 self-contained):
+- Install in two steps to avoid indexing issues:
 
 ```bash
-pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cu124
+# 1) Install PyTorch from cu124 index (CUDA 12.x compatible)
+pip install --index-url https://download.pytorch.org/whl/cu124 \
+  torch==2.5.1+cu124 torchvision==0.20.1+cu124 torchaudio==2.5.1+cu124
+
+# 2) Install the remaining dependencies from PyPI
+pip install -r requirements.txt
 ```
 
 ### 1) Prepare Dataset
