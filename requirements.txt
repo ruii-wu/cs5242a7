@@ -16,7 +16,7 @@ tokenizers==0.19.1
 
 bitsandbytes==0.43.3
 
-alpaca-eval==0.5.7
+alpaca-eval==0.6.6
 fastchat==0.2.45
 matplotlib==3.9.2
 pandas==2.2.2
