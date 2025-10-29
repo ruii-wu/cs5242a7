@@ -145,7 +145,8 @@ def main(
 
     steps_per_epoch = math.ceil(len(tokenized["train"]) / (batch_size * max(1, torch.cuda.device_count()) * grad_accum_steps))
     save_steps = max(50, steps_per_epoch)
-    eval_steps = max(50, steps_per_epoch)
+    # Evaluate more frequently: every 100-200 steps or at least 5-10 times per epoch
+    eval_steps = max(100, min(steps_per_epoch // 5, 200))
 
     # Prefer bf16 when supported; otherwise fall back to fp16 if requested
     bf16_supported = torch.cuda.is_available() and torch.cuda.get_device_capability(0)[0] >= 8

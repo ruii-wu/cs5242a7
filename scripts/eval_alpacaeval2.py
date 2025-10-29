@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 from typing import List
 
@@ -129,9 +130,74 @@ def run_alpacaeval(
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
         
         if result.returncode == 0:
-            print("\n=== AlpacaEval 2 Results ===")
+            print("\n" + "="*70)
+            print("AlpacaEval 2 Results")
+            print("="*70)
             print(result.stdout)
-            print(f"\nFull results saved to: {output_json}")
+            
+            # Parse and display key metrics
+            lines = result.stdout.split("\n")
+            win_rate = None
+            n_total = None
+            
+            for line in lines:
+                # Try to extract win_rate (format varies: "win_rate: 0.XX" or "XX%")
+                if "win_rate" in line.lower() or "win rate" in line.lower():
+                    # Extract numbers from the line
+                    numbers = re.findall(r'[\d.]+', line)
+                    if numbers:
+                        try:
+                            win_rate = float(numbers[0])
+                            if win_rate > 1.0:  # If it's a percentage (e.g., 75.5)
+                                win_rate = win_rate / 100.0
+                        except:
+                            pass
+                if "n_total" in line.lower() or "total" in line.lower():
+                    numbers = re.findall(r'\d+', line)
+                    if numbers:
+                        n_total = int(numbers[-1])
+            
+            # Display comparison summary
+            print("\n" + "-"*70)
+            print("📊 Performance Summary")
+            print("-"*70)
+            
+            if win_rate is not None:
+                baseline_rate = 0.50  # AlpacaEval baseline is typically 50% (ties)
+                improvement = win_rate - baseline_rate
+                improvement_pct = improvement * 100
+                
+                print(f"✅ Win Rate: {win_rate:.1%}")
+                print(f"📈 Baseline Win Rate: {baseline_rate:.1%}")
+                
+                if improvement > 0:
+                    print(f"🎉 Improvement: +{improvement_pct:.1f} percentage points")
+                    print(f"💪 Your fine-tuned model performs better than baseline!")
+                elif improvement < 0:
+                    print(f"⚠️  Change: {improvement_pct:.1f} percentage points")
+                    print(f"💡 Model may need more training or hyperparameter tuning")
+                else:
+                    print(f"➡️  Performance similar to baseline")
+                
+                if n_total:
+                    print(f"\n📋 Evaluated on {n_total} examples")
+            else:
+                print("⚠️  Could not parse win_rate from results. Check full output above.")
+            
+            print("="*70)
+            
+            # Save results summary
+            results_summary_path = str(Path(output_json).parent / f"{Path(output_json).stem}_summary.txt")
+            with open(results_summary_path, "w", encoding="utf-8") as f:
+                f.write(result.stdout)
+                if win_rate is not None:
+                    f.write(f"\n\nSummary:\n")
+                    f.write(f"Win Rate: {win_rate:.1%}\n")
+                    f.write(f"Baseline: {baseline_rate:.1%}\n")
+                    f.write(f"Improvement: {improvement_pct:+.1f}pp\n")
+            print(f"\n✅ Full results saved to: {results_summary_path}")
+            print(f"✅ Model outputs saved to: {output_json}")
+            
             return result.stdout
         else:
             print(f"Judging encountered errors: {result.stderr}")
