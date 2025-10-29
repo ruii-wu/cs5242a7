@@ -1,12 +1,9 @@
-# Install with:
-#   pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cu124
+# pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cu124
 
-# PyTorch (CUDA 12.4 wheels; self-contained and compatible with CUDA 12.x)
-torch==2.5.1+cu124
-torchvision==0.20.1+cu124
-torchaudio==2.5.1+cu124
+torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
 
-# Hugging Face stack
 transformers==4.44.2
 accelerate==0.34.2
 datasets==2.19.1
@@ -14,14 +11,11 @@ peft==0.13.2
 trl==0.9.6
 safetensors==0.4.5
 
-# Tokenization / LLaMA deps
 sentencepiece==0.2.0
 tokenizers==0.19.1
 
-# Optional quantization (enable 8-bit/4-bit when available)
 bitsandbytes==0.43.3
 
-# Evaluation and utilities
 alpaca-eval==0.5.7
 fastchat==0.2.45
 matplotlib==3.9.2
@@ -33,9 +27,7 @@ evaluate==0.4.2
 typer==0.12.5
 pydantic==2.9.2
 
-# Networking helpers
 requests==2.32.3
 httpx==0.27.2
 
-# Experiment tracking (optional)
 wandb==0.17.9
