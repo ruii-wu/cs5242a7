@@ -1,27 +1,41 @@
-torch==2.2.2
-torchvision==0.17.2
-torchaudio==2.2.2
-transformers==4.38.2
-accelerate==0.27.2
-peft==0.9.0
-trl==0.8.1
-bitsandbytes==0.42.0
-datasets==2.18.0
-huggingface-hub==0.21.4
-tokenizers==0.15.2
+# Install with:
+#   pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cu124
+
+# PyTorch (CUDA 12.4 wheels; self-contained and compatible with CUDA 12.x)
+torch==2.5.1+cu124
+torchvision==0.20.1+cu124
+torchaudio==2.5.1+cu124
+
+# Hugging Face stack
+transformers==4.44.2
+accelerate==0.34.2
+datasets==2.19.1
+peft==0.13.2
+trl==0.9.6
+safetensors==0.4.5
+
+# Tokenization / LLaMA deps
 sentencepiece==0.2.0
-protobuf==4.25.3
-alpaca-eval==0.6.0
-fschat==0.2.36
-lm-eval==0.4.2
-tensorboard==2.16.2
-matplotlib==3.8.3
-seaborn==0.13.2
-wandb==0.16.4
+tokenizers==0.19.1
+
+# Optional quantization (enable 8-bit/4-bit when available)
+bitsandbytes==0.43.3
+
+# Evaluation and utilities
+alpaca-eval==0.5.7
+fastchat==0.2.45
+matplotlib==3.9.2
+pandas==2.2.2
 numpy==1.26.4
-pandas==2.2.1
-scipy==1.12.0
-tqdm==4.66.2
-packaging==24.0
-psutil==5.9.8
-safetensors==0.4.2
+tqdm==4.66.5
+scikit-learn==1.5.1
+evaluate==0.4.2
+typer==0.12.5
+pydantic==2.9.2
+
+# Networking helpers
+requests==2.32.3
+httpx==0.27.2
+
+# Experiment tracking (optional)
+wandb==0.17.9
