@@ -61,12 +61,26 @@ python scripts/eval_alpacaeval2.py \
   --max_examples 300    # 控制在基准集的一半以下以节省成本
 ```
 
-MT-Bench（FastChat，建议 mini 评测模型与子集问题数）
+MT-Bench（FastChat，支持与 baseline 对比显示提升）
+
+**方法 1: 自动对比（推荐）**
 ```bash
+# 直接对比微调模型与 baseline，自动显示提升
+python scripts/eval_mtbench_compare.py \
+  --finetuned_model_dir outputs/llama2-7b-dolly-lora \
+  --baseline_model meta-llama/Llama-2-7b-chat-hf \
+  --judge_model gpt-4o-mini \
+  --num_questions 40
+```
+
+**方法 2: 手动运行（如果需要自定义）**
+```bash
+# 1) 准备合并后的模型
 python scripts/eval_mtbench.py --model_dir outputs/llama2-7b-dolly-lora --merged_out outputs/merged-for-fastchat
-# Then follow FastChat docs to serve the merged model and run MT-Bench.
-# 例如：使用 gpt-4o-mini 并限制 40/80 题
-# python -m fastchat.eval.mt_bench --model-path http://localhost:8000 --num-questions 40 --judge-model gpt-4o-mini
+
+# 2) 按照 FastChat 文档启动服务，然后运行评估
+# 例如：使用 gpt-4o-mini 并限制 40 题
+python -m fastchat.eval.mt_bench --model-path http://localhost:8000 --num-questions 40 --judge-model gpt-4o-mini
 ```
 
 ### 5) Chat with the Model
