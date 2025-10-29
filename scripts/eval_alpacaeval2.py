@@ -123,14 +123,15 @@ def save_alpacaeval_outputs(
     generator_name,
 ):
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    records = []
+    for ex, out in zip(prompts, generations):
+        records.append({
+            "instruction": ex.get("instruction") or ex.get("prompt") or ex.get("question") or "",
+            "output": out,
+            "generator": generator_name,
+        })
     with open(out_path, "w", encoding="utf-8") as f:
-        for ex, out in zip(prompts, generations):
-            record = {
-                "instruction": ex.get("instruction") or ex.get("prompt") or ex.get("question") or "",
-                "output": out,
-                "generator": generator_name,
-            }
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        json.dump(records, f, ensure_ascii=False)
 
 
 def main(
@@ -167,7 +168,7 @@ def main(
         model.eval()
         gens = generate_outputs(model, tokenizer, prompts, max_new_tokens, temperature, top_p)
         save_alpacaeval_outputs(
-            str(Path(output_dir) / "alpacaeval2_finetuned_outputs.jsonl"),
+            str(Path(output_dir) / "alpacaeval2_finetuned_outputs.json"),
             prompts,
             gens,
             generator_name="finetuned",
@@ -179,7 +180,7 @@ def main(
         base_only.eval()
         gens_base = generate_outputs(base_only, tokenizer, prompts, max_new_tokens, temperature, top_p)
         save_alpacaeval_outputs(
-            str(Path(output_dir) / "alpacaeval2_base_outputs.jsonl"),
+            str(Path(output_dir) / "alpacaeval2_base_outputs.json"),
             prompts,
             gens_base,
             generator_name="base",
@@ -187,14 +188,14 @@ def main(
 
     print("Done. Outputs saved in:")
     if adapter_dir is not None:
-        print(str(Path(output_dir) / "alpacaeval2_finetuned_outputs.jsonl"))
+        print(str(Path(output_dir) / "alpacaeval2_finetuned_outputs.json"))
     if run_base:
-        print(str(Path(output_dir) / "alpacaeval2_base_outputs.jsonl"))
+        print(str(Path(output_dir) / "alpacaeval2_base_outputs.json"))
     print(
         "Next: run AlpacaEval 2 CLI to judge, e.g.:\n"
-        "  alpaca_eval evaluate --model_outputs outputs/alpacaeval2_finetuned_outputs.jsonl --reference_outputs alpaca_eval/reference/alpaca_eval_gpt4.jsonl --annotators_config gpt-4o-mini\n"
+        "  alpaca_eval evaluate --model_outputs outputs/alpacaeval2_finetuned_outputs.json --annotators_config gpt-4o-mini\n"
         "Or compare two models:\n"
-        "  alpaca_eval evaluate --model_outputs outputs/alpacaeval2_finetuned_outputs.jsonl,outputs/alpacaeval2_base_outputs.jsonl --annotators_config gpt-4o-mini"
+        "  alpaca_eval evaluate --model_outputs outputs/alpacaeval2_finetuned_outputs.json,outputs/alpacaeval2_base_outputs.json --annotators_config gpt-4o-mini"
     )
 
 

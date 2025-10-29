@@ -1,9 +1,6 @@
 import json
 import math
-# from dataclasses import dataclass  <- 移除 (未使用)
 from pathlib import Path
-# from typing import Dict, List, Optional <- 移除
-
 import torch
 from datasets import load_dataset
 from transformers import (
@@ -188,4 +185,3 @@ if __name__ == "__main__":
         disable_gradient_checkpointing=args.disable_gradient_checkpointing,
         dataloader_num_workers=args.dataloader_num_workers,
     )
-

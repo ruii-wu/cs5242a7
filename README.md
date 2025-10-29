@@ -62,7 +62,7 @@ python scripts/eval_alpacaeval2.py \
 
 # Judge and compare (pick an annotator within budget)
 alpaca_eval evaluate \
-  --model_outputs outputs/eval_alpacaeval2/alpacaeval2_finetuned_outputs.jsonl,outputs/eval_alpacaeval2/alpacaeval2_base_outputs.jsonl \
+  --model_outputs outputs/eval_alpacaeval2/alpacaeval2_finetuned_outputs.json,outputs/eval_alpacaeval2/alpacaeval2_base_outputs.json \
   --annotators_config gpt-4o-mini
 ```
 
@@ -79,12 +79,12 @@ python scripts/eval_mtbench.py \
 # Judge with FastChat and summarize
 python -m fastchat.llm_judge.gen_judgment \
   --model-list gpt-4o-mini \
-  --answer-file outputs/eval_mtbench/mtbench_finetuned_answers.jsonl,outputs/eval_mtbench/mtbench_base_answers.jsonl \
-  --ref-answer-file path/to/mt_bench/reference_answers.jsonl \
-  --judge-file outputs/eval_mtbench/mtbench_judgments.jsonl
+  --answer-file outputs/eval_mtbench/mtbench_finetuned_answers.json,outputs/eval_mtbench/mtbench_base_answers.json \
+  --ref-answer-file path/to/mt_bench/reference_answers.json \
+  --judge-file outputs/eval_mtbench/mtbench_judgments.json
 
 python -m fastchat.llm_judge.show_result \
-  --judge-file outputs/eval_mtbench/mtbench_judgments.jsonl
+  --judge-file outputs/eval_mtbench/mtbench_judgments.json
 ```
 
 Notes:

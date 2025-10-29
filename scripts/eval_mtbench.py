@@ -151,8 +151,7 @@ def answer_mtbench(
 def save_mtbench_answers(path, records):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        for rec in records:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        json.dump(records, f, ensure_ascii=False)
 
 
 def main(
@@ -186,29 +185,29 @@ def main(
         model = PeftModel.from_pretrained(base, adapter_dir)
         model.eval()
         answers_ft = answer_mtbench(model, tokenizer, questions, max_new_tokens, temperature, top_p)
-        save_mtbench_answers(str(Path(output_dir) / "mtbench_finetuned_answers.jsonl"), answers_ft)
+        save_mtbench_answers(str(Path(output_dir) / "mtbench_finetuned_answers.json"), answers_ft)
 
     # Base model answers
     if run_base:
         base_only = build_base_model(base_model)
         base_only.eval()
         answers_base = answer_mtbench(base_only, tokenizer, questions, max_new_tokens, temperature, top_p)
-        save_mtbench_answers(str(Path(output_dir) / "mtbench_base_answers.jsonl"), answers_base)
+        save_mtbench_answers(str(Path(output_dir) / "mtbench_base_answers.json"), answers_base)
 
     print("Done. Answers saved in:")
     if adapter_dir is not None:
-        print(str(Path(output_dir) / "mtbench_finetuned_answers.jsonl"))
+        print(str(Path(output_dir) / "mtbench_finetuned_answers.json"))
     if run_base:
-        print(str(Path(output_dir) / "mtbench_base_answers.jsonl"))
+        print(str(Path(output_dir) / "mtbench_base_answers.json"))
     print(
         "Next: run FastChat judging, e.g.:\n"
         "  python -m fastchat.llm_judge.gen_judgment \\\n" 
         "      --model-list gpt-4o-mini \\\n" 
-        "      --answer-file outputs/mtbench_finetuned_answers.jsonl,outputs/mtbench_base_answers.jsonl \\\n" # 修正了 `+` 符号
-        "      --ref-answer-file mt_bench/reference_answers.jsonl \\\n" 
-        "      --judge-file outputs/mtbench_judgments.jsonl\n"
+        "      --answer-file outputs/mtbench_finetuned_answers.json,outputs/mtbench_base_answers.json \\\n" # 修正了 `+` 符号
+        "      --ref-answer-file mt_bench/reference_answers.json \\\n" 
+        "      --judge-file outputs/mtbench_judgments.json\n"
         "Then summarize with:\n"
-        "  python -m fastchat.llm_judge.show_result --judge-file outputs/mtbench_judgments.jsonl"
+        "  python -m fastchat.llm_judge.show_result --judge-file outputs/mtbench_judgments.json"
     )
 
 
