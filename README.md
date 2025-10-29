@@ -21,7 +21,7 @@ huggingface-cli login
 
 ### 1) Prepare Dataset
 ```bash
-python scripts/prep_dolly.py --output_dir data/dolly15k_prepared
+python scripts/prep_dataset.py --output_dir data/dolly15k_prepared
 ```
 
 ### 2) Train (LoRA)
@@ -62,7 +62,7 @@ python scripts/eval_alpacaeval2.py \
 
 # Judge and compare (pick an annotator within budget)
 alpaca_eval evaluate \
-  --model_outputs outputs/eval_alpacaeval2/alpacaeval2_finetuned_outputs.json,outputs/eval_alpacaeval2/alpacaeval2_base_outputs.json \
+  --model_outputs outputs/eval_alpacaeval2/alpacaeval2_finetuned_outputs.json outputs/eval_alpacaeval2/alpacaeval2_base_outputs.json \
   --annotators_config gpt-4o-mini
 ```
 
@@ -78,10 +78,11 @@ python scripts/eval_mtbench.py \
 
 # Judge with FastChat and summarize
 python -m fastchat.llm_judge.gen_judgment \
-  --model-list gpt-4o-mini \
-  --answer-file outputs/eval_mtbench/mtbench_finetuned_answers.json,outputs/eval_mtbench/mtbench_base_answers.json \
-  --ref-answer-file path/to/mt_bench/reference_answers.json \
-  --judge-file outputs/eval_mtbench/mtbench_judgments.json
+  --bench-name mt_bench \
+  --model-list finetuned base \
+  --judge-model gpt-4o-mini \
+  --mode pairwise-all \
+  --parallel 2
 
 python -m fastchat.llm_judge.show_result \
   --judge-file outputs/eval_mtbench/mtbench_judgments.json

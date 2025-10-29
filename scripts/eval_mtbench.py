@@ -203,7 +203,7 @@ def main(
         "Next: run FastChat judging, e.g.:\n"
         "  python -m fastchat.llm_judge.gen_judgment \\\n" 
         "      --model-list gpt-4o-mini \\\n" 
-        "      --answer-file outputs/mtbench_finetuned_answers.json,outputs/mtbench_base_answers.json \\\n" # 修正了 `+` 符号
+        "      --answer-file outputs/mtbench_finetuned_answers.json,outputs/mtbench_base_answers.json \\\n" 
         "      --ref-answer-file mt_bench/reference_answers.json \\\n" 
         "      --judge-file outputs/mtbench_judgments.json\n"
         "Then summarize with:\n"
