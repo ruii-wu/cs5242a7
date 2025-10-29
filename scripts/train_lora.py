@@ -27,7 +27,7 @@ def load_tokenizer(model_name: str):
     return tokenizer
 
 
-def build_model(model_name: str, load_in_4bit: bool, load_in_8bit: bool):
+def build_model(model_name: str, load_in_4bit: bool, load_in_8bit: bool, attn_impl: Optional[str] = None):
     quantization_config = None
     device_map = "auto"
 
@@ -57,8 +57,16 @@ def build_model(model_name: str, load_in_4bit: bool, load_in_8bit: bool):
         model = prepare_model_for_kbit_training(model)
     else:
         model = AutoModelForCausalLM.from_pretrained(
-            model_name, torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32
+            model_name,
+            torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+            device_map=device_map,
         )
+
+    if attn_impl is not None:
+        try:
+            model.config.attn_implementation = attn_impl
+        except Exception:
+            pass
 
     return model
 
@@ -97,8 +105,8 @@ def main(
     max_length: int = 1024,
     lr: float = 2e-4,
     epochs: int = 3,
-    batch_size: int = 1,
-    grad_accum_steps: int = 16,
+    batch_size: int = 2,
+    grad_accum_steps: int = 8,
     warmup_ratio: float = 0.03,
     weight_decay: float = 0.0,
     lora_r: int = 8,
@@ -108,9 +116,20 @@ def main(
     load_in_8bit: bool = False,
     fp16: bool = True,
     bf16: bool = False,
+    disable_gradient_checkpointing: bool = False,
+    dataloader_num_workers: int = 4,
+    attn_impl: Optional[str] = None,
 ):
+    # Enable TF32 on Ampere+ to speed up matmul while keeping good accuracy
+    if torch.cuda.is_available():
+        try:
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            torch.set_float32_matmul_precision("high")
+        except Exception:
+            pass
     tokenizer = load_tokenizer(model_name)
-    model = build_model(model_name, load_in_4bit=load_in_4bit, load_in_8bit=load_in_8bit)
+    model = build_model(model_name, load_in_4bit=load_in_4bit, load_in_8bit=load_in_8bit, attn_impl=attn_impl)
     model = get_lora_model(
         model,
         r=lora_r,
@@ -145,12 +164,13 @@ def main(
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         gradient_accumulation_steps=grad_accum_steps,
+        dataloader_num_workers=dataloader_num_workers,
         warmup_ratio=warmup_ratio,
         weight_decay=weight_decay,
         lr_scheduler_type="cosine",
         fp16=use_fp16,
         bf16=use_bf16,
-        gradient_checkpointing=True,
+        gradient_checkpointing=not disable_gradient_checkpointing,
         logging_first_step=True,
         report_to=["none"],
         optim="paged_adamw_8bit" if (load_in_4bit or load_in_8bit) else "adamw_torch",
@@ -200,6 +220,9 @@ if __name__ == "__main__":
     parser.add_argument("--load_in_8bit", action="store_true")
     parser.add_argument("--no_fp16", action="store_true")
     parser.add_argument("--no_bf16", action="store_true")
+    parser.add_argument("--disable_gradient_checkpointing", action="store_true")
+    parser.add_argument("--dataloader_num_workers", type=int, default=4)
+    parser.add_argument("--attn_impl", type=str, default=None, help="e.g., flash_attention_2 if installed")
     args = parser.parse_args()
 
     main(
@@ -220,6 +243,9 @@ if __name__ == "__main__":
         load_in_8bit=args.load_in_8bit,
         fp16=not args.no_fp16,
         bf16=not args.no_bf16,
+        disable_gradient_checkpointing=args.disable_gradient_checkpointing,
+        dataloader_num_workers=args.dataloader_num_workers,
+        attn_impl=args.attn_impl,
     )
 
 
