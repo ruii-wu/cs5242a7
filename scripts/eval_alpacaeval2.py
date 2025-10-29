@@ -37,7 +37,12 @@ def build_pipeline(model_dir: str, base_model: str = None, device: str = None):
     return gen
 
 
-def run_alpacaeval(model_dir: str, output_json: str = "outputs/alpacaeval2_answers.json"):
+def run_alpacaeval(
+    model_dir: str,
+    output_json: str = "outputs/alpacaeval2_answers.json",
+    judge_model: str = "gpt-4o-mini",
+    max_examples: int = 300,
+):
     # Lazy import to avoid hard dep when not evaluating
     from alpaca_eval.main import main as alpaca_main
 
@@ -66,7 +71,18 @@ def run_alpacaeval(model_dir: str, output_json: str = "outputs/alpacaeval2_answe
 
     # Run evaluation (this will download benchmark and run judging if configured)
     # The API supports passing a python callable model
-    results = alpaca_main(model=model_wrapper, output_path=output_json)
+    # Try passing judge model and subset size when supported by the API
+    try:
+        results = alpaca_main(
+            model=model_wrapper,
+            output_path=output_json,
+            judge_model=judge_model,
+            num_examples=max_examples,
+        )
+    except TypeError:
+        # Fallback if current alpaca-eval version doesn't support these kwargs
+        print("alpaca_eval.main.main signature does not support judge_model/num_examples; running defaults.")
+        results = alpaca_main(model=model_wrapper, output_path=output_json)
     print("AlpacaEval 2 results saved to:", output_json)
     print(results)
 
@@ -77,8 +93,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run AlpacaEval 2 with a HF LoRA model")
     parser.add_argument("--model_dir", type=str, default="outputs/llama2-7b-dolly-lora")
     parser.add_argument("--output_json", type=str, default="outputs/alpacaeval2_answers.json")
+    parser.add_argument("--judge_model", type=str, default="gpt-4o-mini", help="OpenAI judge model for AlpacaEval 2")
+    parser.add_argument("--max_examples", type=int, default=300, help="Limit the number of eval prompts to control cost")
     args = parser.parse_args()
     Path(Path(args.output_json).parent).mkdir(parents=True, exist_ok=True)
-    run_alpacaeval(args.model_dir, args.output_json)
+    run_alpacaeval(args.model_dir, args.output_json, judge_model=args.judge_model, max_examples=args.max_examples)
 
 

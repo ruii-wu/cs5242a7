@@ -35,16 +35,23 @@ python scripts/plot_losses.py \
 
 ### 4) Evaluate
 
-AlpacaEval 2 (requires `OPENAI_API_KEY` for judged metrics):
+AlpacaEval 2（建议使用 mini 评测模型以节省开销；需 `OPENAI_API_KEY`）
 ```bash
-set OPENAI_API_KEY=sk-...   # Windows PowerShell: $env:OPENAI_API_KEY="sk-..."
-python scripts/eval_alpacaeval2.py --model_dir outputs/llama2-7b-dolly-lora --output_json outputs/alpacaeval2_answers.json
+# CMD: set OPENAI_API_KEY=sk-...
+# PowerShell: $env:OPENAI_API_KEY="sk-..."
+python scripts/eval_alpacaeval2.py \
+  --model_dir outputs/llama2-7b-dolly-lora \
+  --output_json outputs/alpacaeval2_answers.json \
+  --judge_model gpt-4o-mini \
+  --max_examples 300    # 控制在基准集的一半以下以节省成本
 ```
 
-MT-Bench (FastChat):
+MT-Bench（FastChat，建议 mini 评测模型与子集问题数）
 ```bash
 python scripts/eval_mtbench.py --model_dir outputs/llama2-7b-dolly-lora --merged_out outputs/merged-for-fastchat
 # Then follow FastChat docs to serve the merged model and run MT-Bench.
+# 例如：使用 gpt-4o-mini 并限制 40/80 题
+# python -m fastchat.eval.mt_bench --model-path http://localhost:8000 --num-questions 40 --judge-model gpt-4o-mini
 ```
 
 ### 5) Chat with the Model
@@ -54,6 +61,8 @@ python scripts/chat.py --adapter_dir outputs/llama2-7b-dolly-lora --prompt "Expl
 
 ### Notes
 - The `requirements.txt` pins versions for reproducibility.
+- Use `gpt-4o-mini` (or other mini models) for judging to stay within budget.
+- Keep evaluation subset sizes (`--max_examples`, `--num_questions`) conservative to fit ~$10 budget.
 - PyTorch cu124 wheels are self-contained; a system CUDA 12.8 install is fine.
 - For multi-GPU or distributed training, integrate Accelerate/DeepSpeed or FSDP as needed.
 
