@@ -104,9 +104,19 @@ def run_alpacaeval(
         if (len(outputs)) % 10 == 0:
             print(f"Processed {len(outputs)}/{len(current_prompts)} prompts...")
 
-    # Save generated outputs in alpaca-eval expected format (list of dicts with "output" field)
-    # Format: [{"instruction": "...", "output": "..."}, ...]
+    # Save generated outputs in alpaca-eval expected format (DataFrame-like JSON or list of dicts)
     Path(output_json).parent.mkdir(parents=True, exist_ok=True)
+    
+    # Convert to DataFrame format that alpaca-eval expects
+    import pandas as pd
+    df_outputs = pd.DataFrame(outputs)
+    # Save as JSON lines (one dict per line) which is more compatible
+    output_jsonl = str(output_json).replace(".json", ".jsonl")
+    with open(output_jsonl, "w", encoding="utf-8") as f:
+        for item in outputs:
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
+    
+    # Also save as JSON for compatibility
     with open(output_json, "w", encoding="utf-8") as f:
         json.dump(outputs, f, indent=2, ensure_ascii=False)
     print(f"Generated responses saved to: {output_json} ({len(outputs)} examples)")
@@ -117,71 +127,118 @@ def run_alpacaeval(
     import sys
     
     try:
-        # Try using alpaca-eval CLI command (not as module)
-        # First, try to find the alpaca-eval command
-        import shutil
-        alpaca_eval_cmd = shutil.which("alpaca-eval")
-        
-        # Try using Python API directly (more reliable)
+        # Use alpaca_eval Python API with correct format
         print("Using Python API for evaluation...")
+        from alpaca_eval import evaluate as alpaca_evaluate
+        from alpaca_eval import utils as alpaca_utils
+        
+        # Load model outputs - alpaca-eval expects DataFrame with 'output' column
+        # Ensure we have the right columns
+        model_df = pd.DataFrame(outputs)
+        if "output" not in model_df.columns:
+            raise ValueError("Model outputs must have 'output' column")
+        
+        # Get reference outputs (baseline) - load from alpaca_eval baseline
+        reference_df = None
         try:
-            from alpaca_eval import evaluate as alpaca_evaluate
+            # Load baseline - this will download if needed
+            reference_df = alpaca_utils.load_or_convert_to_dataframe("alpaca_eval_gpt4_baseline")
             
-            # Load outputs for evaluation
-            with open(output_json, "r", encoding="utf-8") as f:
-                model_outputs_data = json.load(f)
-            
-            # Extract just the outputs for evaluation
-            model_outputs = [item["output"] for item in model_outputs_data]
-            
-            # Get reference outputs (baseline) if available
-            reference_outputs = None
-            try:
-                baseline_df = utils.load_or_convert_to_dataframe("alpaca_eval_gpt4_baseline")
-                if len(model_outputs) <= len(baseline_df):
-                    if "output" in baseline_df.columns:
-                        reference_outputs = baseline_df.head(len(model_outputs))["output"].tolist()
-            except:
-                pass
-            
-            # Run evaluation using Python API
+            # Ensure reference has 'output' column
+            if "output" not in reference_df.columns:
+                print("Warning: Reference baseline does not have 'output' column, skipping reference comparison")
+                reference_df = None
+            else:
+                # Match the number of examples
+                if len(model_df) < len(reference_df):
+                    reference_df = reference_df.head(len(model_df)).copy()
+                elif len(model_df) > len(reference_df):
+                    # Truncate model outputs to match reference
+                    model_df = model_df.head(len(reference_df)).copy()
+        except Exception as e:
+            print(f"Warning: Could not load baseline reference: {e}")
+            print("Will evaluate without reference baseline (comparison will be limited)")
+            reference_df = None
+        
+        # Run evaluation - use file path (most reliable method)
+        print("Running evaluation (this may take a few minutes)...")
+        
+        # Use the JSONL file we created earlier (or create if needed)
+        model_output_file = str(output_json).replace(".json", ".jsonl")
+        if not Path(model_output_file).exists():
+            # Create JSONL if it doesn't exist
+            with open(model_output_file, "w", encoding="utf-8") as f:
+                for item in outputs:
+                    f.write(json.dumps(item, ensure_ascii=False) + "\n")
+        
+        # Try evaluate with file path (most compatible)
+        try:
             results_dict = alpaca_evaluate(
-                model_outputs=model_outputs,
-                reference_outputs=reference_outputs,
+                model_outputs=model_output_file,
+                reference_outputs=reference_df,  # Can be None or DataFrame
                 annotators_config=judge_model,
                 is_avoid_reannotations=True,
                 max_workers=1,
             )
-            
-            # Format as stdout-like string
-            result_output = f"Win Rate: {results_dict.get('win_rate', 'N/A')}\n"
-            if 'n_total' in results_dict:
-                result_output += f"Total Evaluations: {results_dict['n_total']}\n"
-            result_output += f"\nDetailed Results:\n{json.dumps(results_dict, indent=2)}"
-            
-            class MockResult:
-                returncode = 0
-                stdout = result_output
-                stderr = ""
-            
-            result = MockResult()
-        except Exception as api_error:
-            # Fallback to CLI if available
-            print(f"Python API failed: {api_error}, trying CLI...")
-            alpaca_eval_cmd = shutil.which("alpaca-eval")
-            
-            if alpaca_eval_cmd:
-                cmd = [
-                    alpaca_eval_cmd,
-                    "evaluate",
-                    "--model_outputs", str(output_json),
-                    "--annotators_config", judge_model,
-                    "--is_avoid_reannotations",
-                    "--max_workers", "1",
-                ]
-                result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-            else:
+        except Exception as e:
+            # If that fails, try with DataFrame
+            print(f"File path method failed ({e}), trying DataFrame...")
+            results_dict = alpaca_evaluate(
+                model_outputs=model_df,
+                reference_outputs=reference_df,
+                annotators_config=judge_model,
+                is_avoid_reannotations=True,
+                max_workers=1,
+            )
+        
+        # Extract win rate from results
+        win_rate = results_dict.get('win_rate', None)
+        if win_rate is None:
+            # Try to extract from other fields
+            if 'df_leaderboard' in results_dict:
+                df_lb = results_dict['df_leaderboard']
+                if len(df_lb) > 0:
+                    win_rate = df_lb.iloc[0].get('win_rate', None)
+        
+        n_total = results_dict.get('n_total', len(model_df))
+        
+        # Format as stdout-like string
+        result_output = f"Win Rate: {win_rate:.1%}\n" if win_rate is not None else "Win Rate: N/A\n"
+        result_output += f"Total Evaluations: {n_total}\n"
+        result_output += f"\nDetailed Results:\n{json.dumps({k: v for k, v in results_dict.items() if k != 'df_leaderboard'}, indent=2, default=str)}"
+        
+        class MockResult:
+            returncode = 0
+            stdout = result_output
+            stderr = ""
+        
+        result = MockResult()
+        
+    except Exception as api_error:
+        # Fallback: try to use CLI or provide manual instructions
+        print(f"Python API failed: {api_error}")
+        print(f"\nError details: {str(api_error)}")
+        
+        # Try CLI if available
+        import shutil
+        alpaca_eval_cmd = shutil.which("alpaca-eval")
+        
+        if alpaca_eval_cmd:
+            print("Trying CLI as fallback...")
+            cmd = [
+                alpaca_eval_cmd,
+                "evaluate",
+                "--model_outputs", str(output_json),
+                "--annotators_config", judge_model,
+                "--is_avoid_reannotations",
+                "--max_workers", "1",
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            if result.returncode != 0:
+                print(f"CLI also failed: {result.stderr}")
                 raise RuntimeError(f"Both Python API and CLI failed. API error: {api_error}")
+        else:
+            raise RuntimeError(f"Python API failed and CLI not found. Error: {api_error}\nYou can manually run: alpaca-eval evaluate --model_outputs {output_json} --annotators_config {judge_model}")
         
         if hasattr(result, 'returncode') and result.returncode == 0 or (not hasattr(result, 'returncode') and result.stdout):
             print("\n" + "="*70)
