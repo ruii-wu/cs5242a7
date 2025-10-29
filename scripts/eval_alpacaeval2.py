@@ -1,13 +1,11 @@
 import json
 from pathlib import Path
-from typing import Optional, Dict, Any, List
-
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
 
-def load_tokenizer(model_name: str):
+def load_tokenizer(model_name):
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -15,47 +13,20 @@ def load_tokenizer(model_name: str):
     return tokenizer
 
 
-def build_base_model(model_name: str, load_in_4bit: bool, load_in_8bit: bool, attn_impl: Optional[str] = None):
+def build_base_model(model_name):
     device_map = "auto"
-    if load_in_4bit or load_in_8bit:
-        try:
-            import bitsandbytes as bnb  # noqa: F401
-        except Exception as e:  # pragma: no cover
-            raise RuntimeError(
-                "Requested 4/8-bit loading but bitsandbytes is not available."
-            ) from e
 
-    if load_in_4bit:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.float16,
-            device_map=device_map,
-            load_in_4bit=True,
-        )
-    elif load_in_8bit:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.float16,
-            device_map=device_map,
-            load_in_8bit=True,
-        )
-    else:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-            device_map=device_map,
-        )
-
-    if attn_impl is not None:
-        try:
-            model.config.attn_implementation = attn_impl
-        except Exception:
-            pass
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.bfloat16, 
+        device_map=device_map,
+    )
 
     return model
 
 
-def load_prompts_from_alpacaeval(max_examples: Optional[int] = None) -> List[Dict[str, Any]]:
+def load_prompts_from_alpacaeval(max_examples=None):
+
     """Load prompts from alpaca-eval package."""
     try:
         from alpaca_eval import utils
@@ -90,9 +61,9 @@ def load_prompts_from_alpacaeval(max_examples: Optional[int] = None) -> List[Dic
         )
 
 
-def load_prompts_jsonl(path: str, max_examples: Optional[int] = None) -> List[Dict[str, Any]]:
+def load_prompts_jsonl(path, max_examples=None):
     """Load prompts from a JSONL file."""
-    prompts: List[Dict[str, Any]] = []
+    prompts = [] 
     with open(path, "r", encoding="utf-8") as f:
         for i, line in enumerate(f):
             if line.strip():
@@ -103,7 +74,7 @@ def load_prompts_jsonl(path: str, max_examples: Optional[int] = None) -> List[Di
     return prompts
 
 
-def format_prompt(example: Dict[str, Any]) -> str:
+def format_prompt(example):
     instr = example.get("instruction") or example.get("prompt") or example.get("question") or ""
     ctx = example.get("context") or example.get("input") or ""
     parts = [
@@ -122,12 +93,13 @@ def format_prompt(example: Dict[str, Any]) -> str:
 def generate_outputs(
     model,
     tokenizer,
-    prompts: List[Dict[str, Any]],
-    max_new_tokens: int,
-    temperature: float,
-    top_p: float,
-) -> List[str]:
-    outputs: List[str] = []
+    prompts,
+    max_new_tokens,
+    temperature,
+    top_p,
+):
+
+    outputs = [] 
     for ex in prompts:
         prompt_text = format_prompt(ex)
         inputs = tokenizer(prompt_text, return_tensors="pt").to(model.device)
@@ -145,10 +117,10 @@ def generate_outputs(
 
 
 def save_alpacaeval_outputs(
-    out_path: str,
-    prompts: List[Dict[str, Any]],
-    generations: List[str],
-    generator_name: str,
+    out_path,
+    prompts,
+    generations,
+    generator_name,
 ):
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
@@ -162,26 +134,22 @@ def save_alpacaeval_outputs(
 
 
 def main(
-    base_model: str,
-    adapter_dir: Optional[str],
-    prompts_file: Optional[str],
-    output_dir: str,
-    run_base: bool,
-    max_examples: Optional[int],
-    max_new_tokens: int,
-    temperature: float,
-    top_p: float,
-    load_in_4bit: bool,
-    load_in_8bit: bool,
-    attn_impl: Optional[str],
+    base_model,
+    adapter_dir,
+    prompts_file,
+    output_dir,
+    run_base,
+    max_examples,
+    max_new_tokens,
+    temperature,
+    top_p,
 ):
-    if torch.cuda.is_available():
-        try:
-            torch.backends.cuda.matmul.allow_tf32 = True
-            torch.backends.cudnn.allow_tf32 = True
-            torch.set_float32_matmul_precision("high")
-        except Exception:
-            pass
+    try:
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        torch.set_float32_matmul_precision("high")
+    except Exception:
+        pass
 
     tokenizer = load_tokenizer(base_model)
     
@@ -194,7 +162,7 @@ def main(
 
     # Fine-tuned (LoRA) model
     if adapter_dir is not None:
-        base = build_base_model(base_model, load_in_4bit=load_in_4bit, load_in_8bit=load_in_8bit, attn_impl=attn_impl)
+        base = build_base_model(base_model)
         model = PeftModel.from_pretrained(base, adapter_dir)
         model.eval()
         gens = generate_outputs(model, tokenizer, prompts, max_new_tokens, temperature, top_p)
@@ -207,7 +175,7 @@ def main(
 
     # Base model
     if run_base:
-        base_only = build_base_model(base_model, load_in_4bit=load_in_4bit, load_in_8bit=load_in_8bit, attn_impl=attn_impl)
+        base_only = build_base_model(base_model)
         base_only.eval()
         gens_base = generate_outputs(base_only, tokenizer, prompts, max_new_tokens, temperature, top_p)
         save_alpacaeval_outputs(
@@ -243,9 +211,6 @@ if __name__ == "__main__":
     parser.add_argument("--max_new_tokens", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--top_p", type=float, default=0.95)
-    parser.add_argument("--load_in_4bit", action="store_true")
-    parser.add_argument("--load_in_8bit", action="store_true")
-    parser.add_argument("--attn_impl", type=str, default=None)
 
     args = parser.parse_args()
     main(
@@ -258,9 +223,4 @@ if __name__ == "__main__":
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
         top_p=args.top_p,
-        load_in_4bit=args.load_in_4bit,
-        load_in_8bit=args.load_in_8bit,
-        attn_impl=args.attn_impl,
     )
-
-

@@ -1,6 +1,8 @@
 import json
 import math
+# from dataclasses import dataclass  <- 移除 (未使用)
 from pathlib import Path
+# from typing import Dict, List, Optional <- 移除
 
 import torch
 from datasets import load_dataset
@@ -23,11 +25,13 @@ def load_tokenizer(model_name):
 
 def build_model(model_name): 
     device_map = "auto"
+
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+        torch_dtype=torch.bfloat16, 
         device_map=device_map,
     )
+
     return model
 
 
@@ -72,20 +76,16 @@ def main(
     lora_r=8,
     lora_alpha=16,
     lora_dropout=0.05,
-    fp16=True,
-    bf16=False,
     disable_gradient_checkpointing=False,
     dataloader_num_workers=4,
 ):
-    
-    # Enable TF32 on Ampere+ to speed up matmul while keeping good accuracy
-    if torch.cuda.is_available():
-        try:
-            torch.backends.cuda.matmul.allow_tf32 = True
-            torch.backends.cudnn.allow_tf32 = True
-            torch.set_float32_matmul_precision("high")
-        except Exception:
-            pass
+    try:
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        torch.set_float32_matmul_precision("high")
+    except Exception:
+        pass
+        
     tokenizer = load_tokenizer(model_name)
     model = build_model(model_name) 
     model = get_lora_model(
@@ -101,14 +101,9 @@ def main(
 
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
-    steps_per_epoch = math.ceil(len(tokenized["train"]) / (batch_size * max(1, torch.cuda.device_count()) * grad_accum_steps))
+    steps_per_epoch = math.ceil(len(tokenized["train"]) / (batch_size * torch.cuda.device_count() * grad_accum_steps))
     save_steps = max(50, steps_per_epoch)
     eval_steps = max(100, min(steps_per_epoch // 5, 200))
-
-    # Prefer bf16 when supported; otherwise fall back to fp16 if requested
-    bf16_supported = torch.cuda.is_available() and torch.cuda.get_device_capability(0)[0] >= 8
-    use_bf16 = bool(bf16 and bf16_supported)
-    use_fp16 = bool(fp16 and not use_bf16)
 
     training_args = TrainingArguments(
         output_dir=output_dir,
@@ -126,8 +121,8 @@ def main(
         warmup_ratio=warmup_ratio,
         weight_decay=weight_decay,
         lr_scheduler_type="cosine",
-        fp16=use_fp16,
-        bf16=use_bf16,
+        fp16=False,      
+        bf16=True,       
         gradient_checkpointing=not disable_gradient_checkpointing,
         logging_first_step=True,
         report_to=["none"],
@@ -145,8 +140,6 @@ def main(
 
     trainer.train()
     trainer.save_model(output_dir)
-
-    # Save final adapter config path for downstream eval
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     with open(Path(output_dir) / "adapter_config.json", "w", encoding="utf-8") as f:
         json.dump({
@@ -174,8 +167,6 @@ if __name__ == "__main__":
     parser.add_argument("--lora_r", type=int, default=8)
     parser.add_argument("--lora_alpha", type=int, default=16)
     parser.add_argument("--lora_dropout", type=float, default=0.05)
-    parser.add_argument("--no_fp16", action="store_true")
-    parser.add_argument("--no_bf16", action="store_true")
     parser.add_argument("--disable_gradient_checkpointing", action="store_true")
     parser.add_argument("--dataloader_num_workers", type=int, default=4)
     args = parser.parse_args()
@@ -194,8 +185,7 @@ if __name__ == "__main__":
         lora_r=args.lora_r,
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
-        fp16=not args.no_fp16,
-        bf16=not args.no_bf16,
         disable_gradient_checkpointing=args.disable_gradient_checkpointing,
         dataloader_num_workers=args.dataloader_num_workers,
     )
+

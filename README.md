@@ -32,11 +32,8 @@ python scripts/train_lora.py \
     --output_dir outputs/llama2-7b-dolly-lora \
     --epochs 3 --batch_size 2 --grad_accum_steps 8 \
     --max_length 1024 --lr 2e-4 \
-    --no_fp16 --dataloader_num_workers 8 --disable_gradient_checkpointing
+    --dataloader_num_workers 8 --disable_gradient_checkpointing
 ```
-
-Optional memory-saving:
-- Add `--load_in_8bit` or `--load_in_4bit` (requires bitsandbytes).
 
 ### 3) Plot Loss Curves
 ```bash
