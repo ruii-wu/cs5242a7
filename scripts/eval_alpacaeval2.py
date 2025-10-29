@@ -43,48 +43,107 @@ def run_alpacaeval(
     judge_model: str = "gpt-4o-mini",
     max_examples: int = 300,
 ):
-    # Lazy import to avoid hard dep when not evaluating
-    from alpaca_eval.main import main as alpaca_main
+    # Check for OpenAI API key
+    if os.environ.get("OPENAI_API_KEY") is None:
+        raise ValueError("OPENAI_API_KEY environment variable must be set for judging. Please set it before running evaluation.")
+
+    # Import alpaca_eval modules
+    try:
+        from alpaca_eval import utils
+        import pandas as pd
+    except ImportError:
+        raise ImportError("alpaca-eval not properly installed. Try: pip install alpaca-eval[openai]")
 
     gen = build_pipeline(model_dir)
 
-    # AlpacaEval 2 loads prompts internally; we provide a callable model
-    # Provide OpenAI key if using GPT-based judges
-    if os.environ.get("OPENAI_API_KEY") is None:
-        print("WARNING: OPENAI_API_KEY not set. Judged results may not run.")
-
-    # Create a lightweight wrapper exposing a generate function signature
-    class HFModelWrapper:
-        def __init__(self, pipe):
-            self.pipe = pipe
-
-        def __call__(self, prompts: List[str]) -> List[str]:
-            outs = self.pipe(prompts, max_new_tokens=512, do_sample=True, temperature=0.7, top_p=0.95, pad_token_id=self.pipe.tokenizer.eos_token_id)
-            texts = []
-            for o in outs:
-                # pipeline returns list[dict] per input when batch; normalize
-                last = o[0]["generated_text"] if isinstance(o, list) else o["generated_text"]
-                texts.append(last)
-            return texts
-
-    model_wrapper = HFModelWrapper(gen)
-
-    # Run evaluation (this will download benchmark and run judging if configured)
-    # The API supports passing a python callable model
-    # Try passing judge model and subset size when supported by the API
+    # Load the alpaca eval prompts (subset if needed)
     try:
-        results = alpaca_main(
-            model=model_wrapper,
-            output_path=output_json,
-            judge_model=judge_model,
-            num_examples=max_examples,
-        )
-    except TypeError:
-        # Fallback if current alpaca-eval version doesn't support these kwargs
-        print("alpaca_eval.main.main signature does not support judge_model/num_examples; running defaults.")
-        results = alpaca_main(model=model_wrapper, output_path=output_json)
-    print("AlpacaEval 2 results saved to:", output_json)
-    print(results)
+        current_prompts = utils.load_or_convert_to_dataframe("alpaca_eval_gpt4_baseline")
+    except Exception:
+        # Fallback: try loading from default dataset
+        from datasets import load_dataset
+        ds = load_dataset("tatsu-lab/alpaca_eval", "alpaca_eval", revision="main")
+        current_prompts = pd.DataFrame(ds["eval"])
+
+    if max_examples > 0 and len(current_prompts) > max_examples:
+        print(f"Limiting evaluation to {max_examples} examples (from {len(current_prompts)}) to manage costs.")
+        current_prompts = current_prompts.head(max_examples)
+
+    print(f"Generating responses for {len(current_prompts)} prompts...")
+    
+    # Generate responses using our model
+    outputs = []
+    for idx, row in current_prompts.iterrows():
+        # Extract instruction field (handles both dict-like and Series)
+        if isinstance(row, pd.Series):
+            instruction = row.get("instruction", "")
+        else:
+            instruction = row.get("instruction", "") if hasattr(row, "get") else (row["instruction"] if "instruction" in row else "")
+        
+        if not instruction or not instruction.strip():
+            continue
+        
+        # Format prompt similar to Dolly format for consistency
+        prompt = f"### Instruction:\n{instruction}\n\n### Response:\n"
+        
+        try:
+            result = gen(prompt, max_new_tokens=512, do_sample=True, temperature=0.7, top_p=0.95, pad_token_id=gen.tokenizer.eos_token_id)
+            generated_text = result[0]["generated_text"]
+            # Extract only the response part
+            if "### Response:" in generated_text:
+                response = generated_text.split("### Response:")[-1].strip()
+            else:
+                response = generated_text.replace(prompt, "").strip()
+        except Exception as e:
+            print(f"Error generating response for prompt {idx}: {e}")
+            response = ""
+        
+        outputs.append({"instruction": instruction, "output": response})
+        
+        if (len(outputs)) % 10 == 0:
+            print(f"Processed {len(outputs)}/{len(current_prompts)} prompts...")
+
+    # Save generated outputs in alpaca-eval expected format (list of dicts with "output" field)
+    # Format: [{"instruction": "...", "output": "..."}, ...]
+    Path(output_json).parent.mkdir(parents=True, exist_ok=True)
+    with open(output_json, "w", encoding="utf-8") as f:
+        json.dump(outputs, f, indent=2, ensure_ascii=False)
+    print(f"Generated responses saved to: {output_json} ({len(outputs)} examples)")
+
+    # Now run the judge evaluation using command-line interface
+    print(f"Running judge evaluation with {judge_model}...")
+    import subprocess
+    import sys
+    
+    try:
+        # Use alpaca-eval CLI for judging
+        cmd = [
+            sys.executable, "-m", "alpaca_eval",
+            "evaluate",
+            "--model_outputs", str(output_json),
+            "--annotators_config", judge_model,
+            "--is_avoid_reannotations",
+            "--max_workers", "1",
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        
+        if result.returncode == 0:
+            print("\n=== AlpacaEval 2 Results ===")
+            print(result.stdout)
+            print(f"\nFull results saved to: {output_json}")
+            return result.stdout
+        else:
+            print(f"Judging encountered errors: {result.stderr}")
+            print(f"Generated responses are saved to {output_json}")
+            print("You can manually run: alpaca-eval evaluate --model_outputs <file> --annotators_config gpt-4o-mini")
+            return None
+            
+    except Exception as e:
+        print(f"Error during judging: {e}")
+        print(f"Responses saved to {output_json}; you can manually evaluate them later.")
+        print(f"Try running: alpaca-eval evaluate --model_outputs {output_json} --annotators_config {judge_model}")
+        return None
 
 
 if __name__ == "__main__":

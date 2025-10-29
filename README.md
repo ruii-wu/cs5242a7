@@ -13,6 +13,11 @@ pip install --index-url https://download.pytorch.org/whl/cu124 \
 pip install -r requirements.txt
 ```
 
+**Note:** You need Hugging Face authentication to download LLaMA-2-7B:
+```bash
+huggingface-cli login
+# Follow prompts to enter your HF token
+```
 
 ### 1) Prepare Dataset
 ```bash
@@ -44,6 +49,10 @@ python scripts/plot_losses.py \
 
 AlpacaEval 2（建议使用 mini 评测模型以节省开销；需 `OPENAI_API_KEY`）
 ```bash
+# Set OpenAI API key (required for judging)
+# Linux/Mac: export OPENAI_API_KEY="sk-..."
+# Windows CMD: set OPENAI_API_KEY=sk-...
+# Windows PowerShell: $env:OPENAI_API_KEY="sk-..."
 
 python scripts/eval_alpacaeval2.py \
   --model_dir outputs/llama2-7b-dolly-lora \
