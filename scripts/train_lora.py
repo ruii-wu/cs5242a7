@@ -1,8 +1,6 @@
 import json
 import math
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import torch
 from datasets import load_dataset
@@ -13,13 +11,9 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
-from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
+from peft import LoraConfig, TaskType, get_peft_model
 
-
-DEFAULT_MODEL_NAME = "meta-llama/Llama-2-7b-hf"
-
-
-def load_tokenizer(model_name: str):
+def load_tokenizer(model_name):
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -27,51 +21,17 @@ def load_tokenizer(model_name: str):
     return tokenizer
 
 
-def build_model(model_name: str, load_in_4bit: bool, load_in_8bit: bool, attn_impl: Optional[str] = None):
-    quantization_config = None
+def build_model(model_name): 
     device_map = "auto"
-
-    if load_in_4bit or load_in_8bit:
-        try:
-            import bitsandbytes as bnb  # noqa: F401
-        except Exception as e:  # pragma: no cover
-            raise RuntimeError(
-                "Requested 4/8-bit loading but bitsandbytes is not available."
-            ) from e
-
-    if load_in_4bit:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.float16,
-            device_map=device_map,
-            load_in_4bit=True,
-        )
-        model = prepare_model_for_kbit_training(model)
-    elif load_in_8bit:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.float16,
-            device_map=device_map,
-            load_in_8bit=True,
-        )
-        model = prepare_model_for_kbit_training(model)
-    else:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-            device_map=device_map,
-        )
-
-    if attn_impl is not None:
-        try:
-            model.config.attn_implementation = attn_impl
-        except Exception:
-            pass
-
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+        device_map=device_map,
+    )
     return model
 
 
-def get_lora_model(base_model, r: int, alpha: int, dropout: float, target_modules: Optional[List[str]] = None):
+def get_lora_model(base_model, r, alpha, dropout, target_modules=None):
     lora_cfg = LoraConfig(
         r=r,
         lora_alpha=alpha,
@@ -85,7 +45,7 @@ def get_lora_model(base_model, r: int, alpha: int, dropout: float, target_module
     return lora_model
 
 
-def load_jsonl_dataset(path: str):
+def load_jsonl_dataset(path):
     ds = load_dataset("json", data_files={
         "train": f"{path}/train.jsonl",
         "validation": f"{path}/validation.jsonl",
@@ -94,32 +54,30 @@ def load_jsonl_dataset(path: str):
     return ds
 
 
-def tokenize_function(examples: Dict[str, List[str]], tokenizer: AutoTokenizer, max_length: int):
+def tokenize_function(examples, tokenizer, max_length):
     return tokenizer(examples["text"], truncation=True, max_length=max_length, padding=False)
 
 
 def main(
-    model_name: str = DEFAULT_MODEL_NAME,
-    data_dir: str = "data/dolly15k_prepared",
-    output_dir: str = "outputs/llama2-7b-dolly-lora",
-    max_length: int = 1024,
-    lr: float = 2e-4,
-    epochs: int = 3,
-    batch_size: int = 2,
-    grad_accum_steps: int = 8,
-    warmup_ratio: float = 0.03,
-    weight_decay: float = 0.0,
-    lora_r: int = 8,
-    lora_alpha: int = 16,
-    lora_dropout: float = 0.05,
-    load_in_4bit: bool = False,
-    load_in_8bit: bool = False,
-    fp16: bool = True,
-    bf16: bool = False,
-    disable_gradient_checkpointing: bool = False,
-    dataloader_num_workers: int = 4,
-    attn_impl: Optional[str] = None,
+    model_name="meta-llama/Llama-2-7b-hf",
+    data_dir="data/dolly15k_prepared",
+    output_dir="outputs/llama2-7b-dolly-lora",
+    max_length=1024,
+    lr=2e-4,
+    epochs=3,
+    batch_size=2,
+    grad_accum_steps=8,
+    warmup_ratio=0.03,
+    weight_decay=0.0,
+    lora_r=8,
+    lora_alpha=16,
+    lora_dropout=0.05,
+    fp16=True,
+    bf16=False,
+    disable_gradient_checkpointing=False,
+    dataloader_num_workers=4,
 ):
+    
     # Enable TF32 on Ampere+ to speed up matmul while keeping good accuracy
     if torch.cuda.is_available():
         try:
@@ -129,7 +87,7 @@ def main(
         except Exception:
             pass
     tokenizer = load_tokenizer(model_name)
-    model = build_model(model_name, load_in_4bit=load_in_4bit, load_in_8bit=load_in_8bit, attn_impl=attn_impl)
+    model = build_model(model_name) 
     model = get_lora_model(
         model,
         r=lora_r,
@@ -145,7 +103,6 @@ def main(
 
     steps_per_epoch = math.ceil(len(tokenized["train"]) / (batch_size * max(1, torch.cuda.device_count()) * grad_accum_steps))
     save_steps = max(50, steps_per_epoch)
-    # Evaluate more frequently: every 100-200 steps or at least 5-10 times per epoch
     eval_steps = max(100, min(steps_per_epoch // 5, 200))
 
     # Prefer bf16 when supported; otherwise fall back to fp16 if requested
@@ -174,7 +131,7 @@ def main(
         gradient_checkpointing=not disable_gradient_checkpointing,
         logging_first_step=True,
         report_to=["none"],
-        optim="paged_adamw_8bit" if (load_in_4bit or load_in_8bit) else "adamw_torch",
+        optim="adamw_torch",
     )
 
     trainer = Trainer(
@@ -204,7 +161,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="LoRA fine-tuning for LLaMA-2-7B on Dolly-15K")
-    parser.add_argument("--model_name", type=str, default=DEFAULT_MODEL_NAME)
+    parser.add_argument("--model_name", type=str, default="meta-llama/Llama-2-7b-hf")
     parser.add_argument("--data_dir", type=str, default="data/dolly15k_prepared")
     parser.add_argument("--output_dir", type=str, default="outputs/llama2-7b-dolly-lora")
     parser.add_argument("--max_length", type=int, default=1024)
@@ -217,13 +174,10 @@ if __name__ == "__main__":
     parser.add_argument("--lora_r", type=int, default=8)
     parser.add_argument("--lora_alpha", type=int, default=16)
     parser.add_argument("--lora_dropout", type=float, default=0.05)
-    parser.add_argument("--load_in_4bit", action="store_true")
-    parser.add_argument("--load_in_8bit", action="store_true")
     parser.add_argument("--no_fp16", action="store_true")
     parser.add_argument("--no_bf16", action="store_true")
     parser.add_argument("--disable_gradient_checkpointing", action="store_true")
     parser.add_argument("--dataloader_num_workers", type=int, default=4)
-    parser.add_argument("--attn_impl", type=str, default=None, help="e.g., flash_attention_2 if installed")
     args = parser.parse_args()
 
     main(
@@ -240,13 +194,8 @@ if __name__ == "__main__":
         lora_r=args.lora_r,
         lora_alpha=args.lora_alpha,
         lora_dropout=args.lora_dropout,
-        load_in_4bit=args.load_in_4bit,
-        load_in_8bit=args.load_in_8bit,
         fp16=not args.no_fp16,
         bf16=not args.no_bf16,
         disable_gradient_checkpointing=args.disable_gradient_checkpointing,
         dataloader_num_workers=args.dataloader_num_workers,
-        attn_impl=args.attn_impl,
     )
-
-

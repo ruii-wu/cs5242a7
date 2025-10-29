@@ -66,6 +66,44 @@ def load_mtbench_questions(path: str, max_questions: Optional[int] = None) -> Li
     return questions
 
 
+def auto_load_mtbench_questions(max_questions: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Try to locate MT-Bench questions from FastChat install or download from GitHub."""
+    # 1) Try to locate inside installed fastchat package
+    try:
+        import fastchat  # type: ignore
+        fastchat_dir = Path(fastchat.__file__).parent
+        candidates = [
+            fastchat_dir / "llm_judge" / "mt_bench" / "question.jsonl",
+            fastchat_dir / "llm_judge" / "data" / "mt_bench" / "question.jsonl",
+            fastchat_dir.parent / "fastchat" / "llm_judge" / "mt_bench" / "question.jsonl",
+        ]
+        for cand in candidates:
+            if cand.exists():
+                return load_mtbench_questions(str(cand), max_questions=max_questions)
+    except Exception:
+        pass
+
+    # 2) Fallback: download from official GitHub
+    try:
+        import requests  # type: ignore
+        url = "https://raw.githubusercontent.com/lm-sys/FastChat/main/fastchat/llm_judge/mt_bench/question.jsonl"
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        lines = resp.text.strip().splitlines()
+        questions: List[Dict[str, Any]] = []
+        for line in lines:
+            if line.strip():
+                questions.append(json.loads(line))
+            if max_questions is not None and len(questions) >= max_questions:
+                break
+        return questions
+    except Exception as e:
+        raise FileNotFoundError(
+            "Could not find MT-Bench question.jsonl locally and failed to download. "
+            "Please provide --question_file pointing to FastChat's question.jsonl."
+        ) from e
+
+
 def build_chat_messages(turns: List[str], answers_so_far: List[str]) -> str:
     history_parts: List[str] = []
     for i, user_turn in enumerate(turns[: len(answers_so_far) + 1]):
@@ -129,7 +167,7 @@ def save_mtbench_answers(path: str, records: List[Dict[str, Any]]):
 def main(
     base_model: str,
     adapter_dir: Optional[str],
-    question_file: str,
+    question_file: Optional[str],
     output_dir: str,
     run_base: bool,
     max_questions: Optional[int],
@@ -149,7 +187,11 @@ def main(
             pass
 
     tokenizer = load_tokenizer(base_model)
-    questions = load_mtbench_questions(question_file, max_questions=max_questions)
+    if question_file:
+        questions = load_mtbench_questions(question_file, max_questions=max_questions)
+    else:
+        print("No --question_file provided. Loading MT-Bench questions automatically...")
+        questions = auto_load_mtbench_questions(max_questions=max_questions)
 
     # Fine-tuned model answers
     if adapter_dir is not None:
@@ -185,7 +227,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate MT-Bench answers for local models.")
     parser.add_argument("--base_model", type=str, required=True)
     parser.add_argument("--adapter_dir", type=str, default=None, help="Path to LoRA adapter dir. If omitted, only base is run.")
-    parser.add_argument("--question_file", type=str, required=True, help="Path to MT-Bench questions JSONL.")
+    parser.add_argument("--question_file", type=str, default=None, help="Path to MT-Bench questions JSONL. If not provided, questions will be auto-loaded from FastChat or downloaded.")
     parser.add_argument("--output_dir", type=str, default="outputs/eval_mtbench")
     parser.add_argument("--run_base", action="store_true")
     parser.add_argument("--max_questions", type=int, default=None)
