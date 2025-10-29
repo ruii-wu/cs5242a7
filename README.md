@@ -74,7 +74,6 @@ MT-Bench answers:
 python scripts/eval_mtbench.py \
   --base_model meta-llama/Llama-2-7b-hf \
   --adapter_dir outputs/llama2-7b-dolly-lora/checkpoint-2250 \
-  --question_file path/to/mt_bench/question.jsonl \
   --output_dir outputs/eval_mtbench \
   --run_base \
   --max_questions 40 \

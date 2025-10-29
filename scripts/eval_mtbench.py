@@ -83,24 +83,45 @@ def auto_load_mtbench_questions(max_questions: Optional[int] = None) -> List[Dic
     except Exception:
         pass
 
-    # 2) Fallback: download from official GitHub
+    # 2) Fallback: try downloading from known URLs (GitHub + Hugging Face)
     try:
         import requests  # type: ignore
-        url = "https://raw.githubusercontent.com/lm-sys/FastChat/main/fastchat/llm_judge/mt_bench/question.jsonl"
-        resp = requests.get(url, timeout=30)
-        resp.raise_for_status()
-        lines = resp.text.strip().splitlines()
-        questions: List[Dict[str, Any]] = []
-        for line in lines:
-            if line.strip():
-                questions.append(json.loads(line))
-            if max_questions is not None and len(questions) >= max_questions:
-                break
-        return questions
+        candidate_urls = [
+            # FastChat older path
+            "https://raw.githubusercontent.com/lm-sys/FastChat/main/fastchat/llm_judge/mt_bench/question.jsonl",
+            # FastChat alternative path with data subdir
+            "https://raw.githubusercontent.com/lm-sys/FastChat/main/fastchat/llm_judge/mt_bench/data/question.jsonl",
+            # FastChat alternative data layout
+            "https://raw.githubusercontent.com/lm-sys/FastChat/main/fastchat/llm_judge/data/mt_bench/question.jsonl",
+            # Hugging Face Space (preferred stable link)
+            "https://huggingface.co/spaces/lmsys/mt-bench/resolve/main/data/mt_bench/question.jsonl",
+        ]
+        last_error: Optional[Exception] = None
+        for url in candidate_urls:
+            try:
+                resp = requests.get(url, timeout=30)
+                resp.raise_for_status()
+                text = resp.text
+                # Some hosts may return HTML; do a simple sanity check
+                if "</html>" in text.lower() and "{" not in text:
+                    continue
+                lines = text.strip().splitlines()
+                questions: List[Dict[str, Any]] = []
+                for line in lines:
+                    if line.strip():
+                        questions.append(json.loads(line))
+                    if max_questions is not None and len(questions) >= max_questions:
+                        break
+                if questions:
+                    return questions
+            except Exception as url_err:
+                last_error = url_err
+                continue
+        raise last_error or FileNotFoundError("All candidate URLs failed")
     except Exception as e:
         raise FileNotFoundError(
-            "Could not find MT-Bench question.jsonl locally and failed to download. "
-            "Please provide --question_file pointing to FastChat's question.jsonl."
+            "Could not find MT-Bench question.jsonl locally and failed to download from known mirrors. "
+            "Please provide --question_file pointing to a valid question.jsonl."
         ) from e
 
 
