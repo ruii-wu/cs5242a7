@@ -71,27 +71,25 @@ MT-Bench answers:
 python scripts/eval_mtbench.py \
   --base_model meta-llama/Llama-2-7b-hf \
   --adapter_dir outputs/llama2-7b-dolly-lora/checkpoint-2250 \
-  --output_dir outputs/eval_mtbench \
+  --output_dir data/mt_bench/model_answer \
   --run_base \
   --max_questions 40 \
   --max_new_tokens 512 --temperature 0.2 --top_p 0.95
 
 # Judge with FastChat and summarize
 python -m fastchat.llm_judge.gen_judgment \
-  --bench-name mt_bench \
-  --model-list finetuned base \
-  --judge-model gpt-4o-mini \
-  --mode pairwise-all \
-  --parallel 2
+    --judge-model gpt-4o-mini \
+    --mode pairwise-all \
+    --model-list llama-2-7b-hf llama2-7b-dolly-lora \
+    --parallel 4 \
+    --first-n 40 \
+    --baseline-model gpt-4
 
 python -m fastchat.llm_judge.show_result \
-  --judge-file outputs/eval_mtbench/mtbench_judgments.json
+    --judge-model gpt-4o-mini \
+    --mode pairwise-all \
+    --model-list llama-2-7b-hf llama2-7b-dolly-lora
 ```
-
-Notes:
-- AlpacaEval 2 prompts are automatically loaded from the `alpaca-eval` package if `--prompts_file` is not provided.
-- Use FastChat's official `question.jsonl` and `reference_answers.jsonl` for MT-Bench.
-- You can reduce cost with `--max_examples` / `--max_questions` and cheaper annotators.
 
 ### Notes
 - The `requirements.txt` pins versions for reproducibility.
