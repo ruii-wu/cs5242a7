@@ -107,7 +107,7 @@ def main(
     load_in_4bit: bool = False,
     load_in_8bit: bool = False,
     fp16: bool = True,
-    bf16: bool = True,
+    bf16: bool = False,
 ):
     tokenizer = load_tokenizer(model_name)
     model = build_model(model_name, load_in_4bit=load_in_4bit, load_in_8bit=load_in_8bit)
@@ -128,9 +128,14 @@ def main(
     save_steps = max(50, steps_per_epoch)
     eval_steps = max(50, steps_per_epoch)
 
+    # Prefer bf16 when supported; otherwise fall back to fp16 if requested
+    bf16_supported = torch.cuda.is_available() and torch.cuda.get_device_capability(0)[0] >= 8
+    use_bf16 = bool(bf16 and bf16_supported)
+    use_fp16 = bool(fp16 and not use_bf16)
+
     training_args = TrainingArguments(
         output_dir=output_dir,
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         eval_steps=eval_steps,
         logging_steps=10,
         save_steps=save_steps,
@@ -143,8 +148,8 @@ def main(
         warmup_ratio=warmup_ratio,
         weight_decay=weight_decay,
         lr_scheduler_type="cosine",
-        fp16=fp16,
-        bf16=bf16 and torch.cuda.is_available(),
+        fp16=use_fp16,
+        bf16=use_bf16,
         gradient_checkpointing=True,
         logging_first_step=True,
         report_to=["none"],
