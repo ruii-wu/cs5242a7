@@ -13,6 +13,7 @@ pip install --index-url https://download.pytorch.org/whl/cu124 \
 pip install -r requirements.txt
 ```
 
+
 ### 1) Prepare Dataset
 ```bash
 python scripts/prep_dolly.py --output_dir data/dolly15k_prepared
@@ -21,11 +22,12 @@ python scripts/prep_dolly.py --output_dir data/dolly15k_prepared
 ### 2) Train (LoRA)
 ```bash
 python scripts/train_lora.py \
-  --model_name meta-llama/Llama-2-7b-hf \
-  --data_dir data/dolly15k_prepared \
-  --output_dir outputs/llama2-7b-dolly-lora \
-  --epochs 3 --batch_size 1 --grad_accum_steps 16 \
-  --max_length 1024 --lr 2e-4
+    --model_name meta-llama/Llama-2-7b-hf \
+    --data_dir data/dolly15k_prepared \
+    --output_dir outputs/llama2-7b-dolly-lora \
+    --epochs 3 --batch_size 2 --grad_accum_steps 8 \
+    --max_length 1024 --lr 2e-4 \
+    --no_fp16 --dataloader_num_workers 8 --disable_gradient_checkpointing
 ```
 
 Optional memory-saving:
@@ -42,8 +44,7 @@ python scripts/plot_losses.py \
 
 AlpacaEval 2（建议使用 mini 评测模型以节省开销；需 `OPENAI_API_KEY`）
 ```bash
-# CMD: set OPENAI_API_KEY=sk-...
-# PowerShell: $env:OPENAI_API_KEY="sk-..."
+
 python scripts/eval_alpacaeval2.py \
   --model_dir outputs/llama2-7b-dolly-lora \
   --output_json outputs/alpacaeval2_answers.json \
