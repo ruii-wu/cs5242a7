@@ -45,48 +45,53 @@ python scripts/plot_losses.py \
   --out_png outputs/loss_curve.png
 ```
 
-### 4) Evaluate
+### 4) Evaluation (AlpacaEval 2 + MT-Bench)
 
-AlpacaEval 2（建议使用 mini 评测模型以节省开销；需 `OPENAI_API_KEY`）
+Generate outputs for both the fine-tuned adapter and the base model, then use official evaluators to score and compare.
+
+AlpacaEval 2 outputs:
 ```bash
-# Set OpenAI API key (required for judging)
-# Linux/Mac: export OPENAI_API_KEY="sk-..."
-# Windows CMD: set OPENAI_API_KEY=sk-...
-# Windows PowerShell: $env:OPENAI_API_KEY="sk-..."
-
 python scripts/eval_alpacaeval2.py \
-  --model_dir outputs/llama2-7b-dolly-lora \
-  --output_json outputs/alpacaeval2_answers.json \
-  --judge_model gpt-4o-mini \
-  --max_examples 300    # 控制在基准集的一半以下以节省成本
+  --base_model meta-llama/Llama-2-7b-hf \
+  --adapter_dir outputs/llama2-7b-dolly-lora \
+  --prompts_file path/to/alpacaeval2_prompts.jsonl \
+  --output_dir outputs/eval_alpacaeval2 \
+  --run_base \
+  --max_examples 200 \
+  --max_new_tokens 512 --temperature 0.2 --top_p 0.95
+
+# Judge and compare (pick an annotator within budget)
+alpaca_eval evaluate \
+  --model_outputs outputs/eval_alpacaeval2/alpacaeval2_finetuned_outputs.jsonl,outputs/eval_alpacaeval2/alpacaeval2_base_outputs.jsonl \
+  --annotators_config gpt-4o-mini
 ```
 
-MT-Bench（FastChat，支持与 baseline 对比显示提升）
-
-**方法 1: 自动对比（推荐）**
+MT-Bench answers:
 ```bash
-# 直接对比微调模型与 baseline，自动显示提升
-python scripts/eval_mtbench_compare.py \
-  --finetuned_model_dir outputs/llama2-7b-dolly-lora \
-  --baseline_model meta-llama/Llama-2-7b-chat-hf \
-  --judge_model gpt-4o-mini \
-  --num_questions 40
+python scripts/eval_mtbench.py \
+  --base_model meta-llama/Llama-2-7b-hf \
+  --adapter_dir outputs/llama2-7b-dolly-lora \
+  --question_file path/to/mt_bench/question.jsonl \
+  --output_dir outputs/eval_mtbench \
+  --run_base \
+  --max_questions 40 \
+  --max_new_tokens 512 --temperature 0.2 --top_p 0.95
+
+# Judge with FastChat and summarize
+python -m fastchat.llm_judge.gen_judgment \
+  --model-list gpt-4o-mini \
+  --answer-file outputs/eval_mtbench/mtbench_finetuned_answers.jsonl,outputs/eval_mtbench/mtbench_base_answers.jsonl \
+  --ref-answer-file path/to/mt_bench/reference_answers.jsonl \
+  --judge-file outputs/eval_mtbench/mtbench_judgments.jsonl
+
+python -m fastchat.llm_judge.show_result \
+  --judge-file outputs/eval_mtbench/mtbench_judgments.jsonl
 ```
 
-**方法 2: 手动运行（如果需要自定义）**
-```bash
-# 1) 准备合并后的模型
-python scripts/eval_mtbench.py --model_dir outputs/llama2-7b-dolly-lora --merged_out outputs/merged-for-fastchat
-
-# 2) 按照 FastChat 文档启动服务，然后运行评估
-# 例如：使用 gpt-4o-mini 并限制 40 题
-python -m fastchat.eval.mt_bench --model-path http://localhost:8000 --num-questions 40 --judge-model gpt-4o-mini
-```
-
-### 5) Chat with the Model
-```bash
-python scripts/chat.py --adapter_dir outputs/llama2-7b-dolly-lora --prompt "Explain LoRA in simple terms."
-```
+Notes:
+- Provide AlpacaEval 2 prompts as JSONL with at least `instruction` (optional `context`/`input`).
+- Use FastChat's official `question.jsonl` and `reference_answers.jsonl` for MT-Bench.
+- You can reduce cost with `--max_examples` / `--max_questions` and cheaper annotators.
 
 ### Notes
 - The `requirements.txt` pins versions for reproducibility.
