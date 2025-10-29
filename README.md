@@ -41,8 +41,8 @@ Optional memory-saving:
 ### 3) Plot Loss Curves
 ```bash
 python scripts/plot_losses.py \
-  --trainer_state outputs/llama2-7b-dolly-lora/trainer_state.json \
-  --out_png outputs/loss_curve.png
+  --trainer_state outputs/llama2-7b-dolly-lora/checkpoint-2250/trainer_state.json \
+  --out_png outputs/loss_curve_final.png
 ```
 
 ### 4) Evaluation (AlpacaEval 2 + MT-Bench)
@@ -51,14 +51,17 @@ Generate outputs for both the fine-tuned adapter and the base model, then use of
 
 AlpacaEval 2 outputs:
 ```bash
+# Automatically loads prompts from alpaca-eval package (recommended - no --prompts_file needed)
 python scripts/eval_alpacaeval2.py \
   --base_model meta-llama/Llama-2-7b-hf \
   --adapter_dir outputs/llama2-7b-dolly-lora \
-  --prompts_file path/to/alpacaeval2_prompts.jsonl \
   --output_dir outputs/eval_alpacaeval2 \
   --run_base \
-  --max_examples 200 \
+  --max_examples 300 \
   --max_new_tokens 512 --temperature 0.2 --top_p 0.95
+
+# Or provide your own prompts file (optional):
+# python scripts/eval_alpacaeval2.py ... --prompts_file path/to/alpacaeval2_prompts.jsonl ...
 
 # Judge and compare (pick an annotator within budget)
 alpaca_eval evaluate \
@@ -89,7 +92,7 @@ python -m fastchat.llm_judge.show_result \
 ```
 
 Notes:
-- Provide AlpacaEval 2 prompts as JSONL with at least `instruction` (optional `context`/`input`).
+- AlpacaEval 2 prompts are automatically loaded from the `alpaca-eval` package if `--prompts_file` is not provided.
 - Use FastChat's official `question.jsonl` and `reference_answers.jsonl` for MT-Bench.
 - You can reduce cost with `--max_examples` / `--max_questions` and cheaper annotators.
 
