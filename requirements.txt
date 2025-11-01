@@ -65,7 +65,7 @@ nvidia-cusparse-cu12==12.3.1.170
 nvidia-nccl-cu12==2.21.5
 nvidia-nvjitlink-cu12==12.4.127
 nvidia-nvtx-cu12==12.4.127
-openai
+openai #Running mtbench with gpt-4o-mini requires openai==0.28
 packaging==25.0
 pandas==2.2.2
 patsy==1.0.2
