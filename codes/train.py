@@ -1,6 +1,7 @@
 import json
 import math
 from pathlib import Path
+
 import torch
 from datasets import load_dataset
 from transformers import (
@@ -21,12 +22,10 @@ def load_tokenizer(model_name):
 
 
 def build_model(model_name): 
-    device_map = "auto"
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16, 
-        device_map=device_map,
     )
 
     return model
@@ -185,3 +184,4 @@ if __name__ == "__main__":
         disable_gradient_checkpointing=args.disable_gradient_checkpointing,
         dataloader_num_workers=args.dataloader_num_workers,
     )
+

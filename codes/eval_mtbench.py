@@ -12,11 +12,10 @@ def load_tokenizer(model_name):
     return tokenizer
 
 def build_base_model(model_name):
-    device_map = "auto"
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch.bfloat16,
-        device_map=device_map,
+        torch_dtype=torch.bfloat16
+    )
     
     return model
 
