@@ -59,10 +59,9 @@ python codes/eval_alpacaeval2.py \
   --max_new_tokens 512 --temperature 0.2 --top_p 0.95
 ```
 
-# Judge and compare
-
+Judge and compare:
 If gpt-4o-mini is used, its configs.yaml needs to be added to ./venv/lib/python3.12/site-packages/alpaca_eval/evaluators_configs/gpt-4o-mini/configs.yaml
-
+```bash
 gpt-4o-mini:
   prompt_template: "chatgpt/basic_prompt.txt"
   fn_completions: "openai_completions"
@@ -75,8 +74,8 @@ gpt-4o-mini:
       1: '(?:^|\n) ?Output \(a\)'
       2: '(?:^|\n) ?Output \(b\)'
   batch_size: 1
-'''
-
+```
+Run the judgement
 ```bash
 alpaca_eval evaluate \
   --model_outputs outputs/eval_alpacaeval2/alpacaeval2_finetuned_outputs.json outputs/eval_alpacaeval2/alpacaeval2_base_outputs.json \
@@ -94,17 +93,17 @@ python codes/eval_mtbench.py \
   --max_new_tokens 512 --temperature 0.2 --top_p 0.95
 ```
 
-# Judge with FastChat and summarize
-If gpt-4o-mini is used, its model name needs to be added to OPENAI_MODEL_LIST in the ./venv/lib/python3.12/site-packages/fastchat/model/model_adapter.py
+Judge with FastChat and summarize
 
+If gpt-4o-mini is used, its model name needs to be added to OPENAI_MODEL_LIST in the ./venv/lib/python3.12/site-packages/fastchat/model/model_adapter.py
+```bash
 OPENAI_MODEL_LIST = (
     "gpt-4o-mini"
 )
-
+```
 And openai library version needs to be openai==0.28
 
-
-# If some of mt-bench files are missing, downloading them by the following command
+If some of mt-bench files are missing, downloading them by the following command
 mkdir -p data/mt_bench
 wget https://raw.githubusercontent.com/lm-sys/FastChat/main/fastchat/llm_judge/data/mt_bench/question.jsonl -O data/mt_bench/question.jsonl
 
@@ -113,7 +112,8 @@ wget https://raw.githubusercontent.com/lm-sys/FastChat/main/fastchat/llm_judge/d
 mkdir -p data/mt_bench/reference_answer
 wget https://raw.githubusercontent.com/lm-sys/FastChat/main/fastchat/llm_judge/data/mt_bench/reference_answer/gpt-4.jsonl \
      -O data/mt_bench/reference_answer/gpt-4.jsonl
-# And gpt-4.jsonl needs to be renamed as gpt-4o-mini.jsonl if gpt-4o-mini is used as judge model (Since there is no standard answer from gpt-4o-mini)
+
+And gpt-4.jsonl needs to be renamed as gpt-4o-mini.jsonl if gpt-4o-mini is used as judge model (Since there is no standard answer from gpt-4o-mini)
 
 ```bash
 python -m fastchat.llm_judge.gen_judgment \
