@@ -104,6 +104,7 @@ OPENAI_MODEL_LIST = (
 And openai library version needs to be openai==0.28
 
 If some of mt-bench files are missing, downloading them by the following command
+```bash
 mkdir -p data/mt_bench
 wget https://raw.githubusercontent.com/lm-sys/FastChat/main/fastchat/llm_judge/data/mt_bench/question.jsonl -O data/mt_bench/question.jsonl
 
@@ -112,7 +113,7 @@ wget https://raw.githubusercontent.com/lm-sys/FastChat/main/fastchat/llm_judge/d
 mkdir -p data/mt_bench/reference_answer
 wget https://raw.githubusercontent.com/lm-sys/FastChat/main/fastchat/llm_judge/data/mt_bench/reference_answer/gpt-4.jsonl \
      -O data/mt_bench/reference_answer/gpt-4.jsonl
-
+```
 And gpt-4.jsonl needs to be renamed as gpt-4o-mini.jsonl if gpt-4o-mini is used as judge model (Since there is no standard answer from gpt-4o-mini)
 
 ```bash
