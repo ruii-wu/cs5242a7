@@ -1,2 +1,4 @@
-,win_rate,standard_error,mode,avg_length,n_wins,n_wins_base,n_draws,n_total,discrete_win_rate,length_controlled_winrate,lc_standard_error
-finetuned,83.0,2.172340568407841,community,1884,249,51,0,300,83.0,68.83325349013468,0.42914399209576226
+,win_rate,standard_error,mode,avg_length,n_wins,n_wins_base,,,,,,
+finetuned,83,2.172340568,community,1884,249,51,,,,,,
+,n_draws,n_total,discrete_win_rate,length_controlled_winrate,lc_standard_error,,,,,,,
+,0,300,83,68.83325349,0.429143992,,,,,,,
